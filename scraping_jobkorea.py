@@ -5,6 +5,9 @@
 # GitHub: https://github.com/yoshimaputri
 # If you are interested in more projects or repositories, 
 # feel free to visit the GitHub link above.
+# 
+# This Program is only scrap the official job list by company
+# Does not include Headhunter job posting
 # ===========================================================
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -15,20 +18,30 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 import time
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+file_handler = logging.FileHandler('scrap.log', mode='a', encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(file_handler)
 
 service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service)
 wait = WebDriverWait(driver, 10)
 
-# Search for 'Data Scientist' job
-search = "Data Scientist"
+# Search for 'X' job
+search = "Product Designer"
+max_get = 30  # Default: 'max'
 job_search_url = f'https://www.jobkorea.co.kr/Search/?stext={search}'
 driver.get(job_search_url) 
 time.sleep(1)  # Let the page load
 # to see what we can scrap or not --> jobkorea.co.kr/robots.txt
 
 job_count = len(driver.find_elements(By.CLASS_NAME, 'list-item'))
-print(f'[INIT...] There is {job_count} JOBS')
+if max_get < job_count:
+    job_count = max_get
+    
+logging.info(f'[INIT...] Getting top {job_count} JOBS')
 jobs_listing = []
 total_filtered_jobs = 0
 
@@ -40,7 +53,7 @@ def go_to_next_page():
             time.sleep(2)
             return True
     except NoSuchElementException:
-        print("No more pages found or next button not found.")
+        logging.warn("No more pages found or next button not found.")
         return False
     
 def get_article(id):
@@ -87,15 +100,15 @@ for idx in range(1, job_count+1):
                 driver.switch_to.frame('gib_frame')
                 check = driver.find_element(By.CLASS_NAME, 'recruitment-items')
             except Exception as e:
-                print(f"[Error No Job Description, might be poster] {str(e)[:120]}")
+                logging.error(f"[Error No Job Description, might be poster/img]")
 
             if check:
                 job_details = check.text
 
         except Exception as e:
-            print(f"[Error Job Details] Company Web doesn't exist (direct recruit by Headhunting) or can't get job details.")
+            logging.error(f"[Error Job Details] Company Web doesn't exist (direct recruit by Headhunting) or can't get job details.")
 
-        if job_details:
+        if job_details: # Only crawl data that publicly shared via job details
             total_filtered_jobs += 1
             job_info = {
                 "Job Title": title,
@@ -109,26 +122,27 @@ for idx in range(1, job_count+1):
             # Append the dictionary to the jobs_data list
             jobs_listing.append(job_info)
 
-            print(f"======== Job Information {total_filtered_jobs} ======")
-            print(f"Job Title: {title}")
-            print(f"Company: {company}")
-            print(f"Location: {location}")
-            print(f"Job Link: {link}")
-            print(f"Corp Web: {corp_web}")
-            print(f"Job Details: {job_details[:50]}")
-            print(f"Due Date: {due_date}")
-            print("="*40)
+            logging.info(f"======== Job Information {total_filtered_jobs} ======")
+            logging.info(f"Job Title: {title}")
+            logging.info(f"Company: {company}")
+            logging.info(f"Location: {location}")
+            logging.info(f"Job Link: {link}")
+            logging.info(f"Corp Web: {corp_web}")
+            logging.info(f"Job Details: (available)")
+            logging.info(f"Due Date: {due_date}")
+            logging.info("="*40)
 
         driver.back()
 
     except Exception as e:
-        print(f"[Error] {e}")
+        logging.error(f"[Error] {e}")
 
 file_name = f"jobs_listing_{search.replace(' ','')}.json"
 with open(file_name, 'w', encoding='utf-8') as json_file:
     json.dump(jobs_listing, json_file, ensure_ascii=False, indent=4)
 
-print(f"Job data successfully saved to {file_name} \nTotal {total_filtered_jobs} Filtered Jobs")
+logging.info(f"Job data successfully saved to {file_name}")
+logging.info(f"Total {total_filtered_jobs} Filtered Jobs.")
 
 # input("Press any key to quit the browser...")
 driver.quit()
