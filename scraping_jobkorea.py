@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
 import time
 import json
 
@@ -31,13 +32,34 @@ print(f'[INIT...] There is {job_count} JOBS')
 jobs_listing = []
 total_filtered_jobs = 0
 
+def go_to_next_page():
+    try:
+        next_button = driver.find_element(By.CLASS_NAME, 'button-next')
+        if next_button:
+            next_button.click()
+            time.sleep(2)
+            return True
+    except NoSuchElementException:
+        print("No more pages found or next button not found.")
+        return False
+    
+def get_article(id):
+    job = None
+    try:
+        job = driver.find_element(By.CSS_SELECTOR, f"article.list-item[data-listno='{id}']")
+    except Exception as e:
+        job = None
+    return job
+
 # Iterate through job postings and scrape relevant data
-for idx in range(job_count):
-    driver.get(job_search_url) 
-    time.sleep(3)
-    job_elements = driver.find_elements(By.CLASS_NAME, 'list-item')
-    job = job_elements[idx]
+for idx in range(1, job_count+1):
+    job = get_article(idx)
+    while job is None:
+        if go_to_next_page():
+            job = get_article(idx)
+        else: break
     info = job.get_attribute('data-gainfo')
+
     try:
         data_info = json.loads(info)
         title = data_info['dimension45']
@@ -71,7 +93,7 @@ for idx in range(job_count):
                 job_details = check.text
 
         except Exception as e:
-            print(f"[Error Job Details] {str(e)[:120]}")
+            print(f"[Error Job Details] Company Web doesn't exist (direct recruit by Headhunting) or can't get job details.")
 
         if job_details:
             total_filtered_jobs += 1
@@ -96,6 +118,8 @@ for idx in range(job_count):
             print(f"Job Details: {job_details[:50]}")
             print(f"Due Date: {due_date}")
             print("="*40)
+
+        driver.back()
 
     except Exception as e:
         print(f"[Error] {e}")
